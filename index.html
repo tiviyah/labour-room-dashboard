@@ -1402,10 +1402,10 @@
             renderAll();
             setInterval(renderAll, 10000); // Refresh time indicators every 10 seconds
         }
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxktbEpE6xFSGIznKbPzrIthnFETTfuefX91SEroWZKnX4TrlKSQNMtYnUzBdgEQ3O9/exec ";
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxktbEpE6xFSGIznKbPzrIthnFETTfuefX91SEroWZKnX4TrlKSQNMtYnUzBdgEQ3O9/exec";
 
 function sendToGoogleSheet(payload) {
-  if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes("PASTE_YOUR_WEB_APP_URL_HERE")) return;
+  if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes("https://script.google.com/macros/s/AKfycbzom4vtO6JWAPSUi4IpOw8qICYh1IfeRHP0itBFWuKpJKwZsLsEq6D6zRg8b22OtSzl/exec")) return;
   
   fetch(GOOGLE_SCRIPT_URL, {
     method: "POST",
