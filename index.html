@@ -1,29 +1,1407 @@
-const GOOGLE_SCRIPT_URL = "YOUR_COPIED_WEB_APP_URL_HERE";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced O&G Labour Room Clinical Dashboard</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    keyframes: {
+                        flashRed: {
+                            '0%, 100%': { backgroundColor: 'rgba(239, 68, 68, 0.2)', borderColor: '#ef4444' },
+                            '50%': { backgroundColor: 'rgba(220, 38, 38, 0.85)', borderColor: '#991b1b', color: '#ffffff' }
+                        }
+                    },
+                    animation: {
+                        'flash-red': 'flashRed 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .dark ::-webkit-scrollbar-thumb { background: #475569; }
+        .alarm-flashing { animation: flashRed 0.8s infinite; }
+    </style>
+</head>
+<body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 min-h-screen flex flex-col transition-colors duration-200">
 
-function logToGoogleSheet(payload) {
-  if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes("YOUR_COPIED_WEB_APP_URL")) return;
-  
-  fetch(GOOGLE_SCRIPT_URL, {
-    method: "POST",
-    mode: "no-cors", // Bypasses CORS restrictions for Apps Script
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  }).catch(err => console.error("Sheet sync error:", err));
-}
+    <!-- TOP CLINICAL HEADER -->
+    <header class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-30 shadow-xs">
+        <div class="max-w-[1700px] mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
+            
+            <!-- Brand & Live Clock -->
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-sky-600 text-white rounded-lg shadow-xs">
+                    <i data-lucide="baby" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="font-bold text-base sm:text-lg leading-tight text-slate-900 dark:text-white">
+                            Labour Room Clinical Command Suite
+                        </h1>
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 dark:bg-sky-900/60 dark:text-sky-300">
+                            Consultant View
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                        <span id="liveTimestamp" class="font-medium text-slate-700 dark:text-slate-300">Oct 9, 2026 - 12:27 PM</span>
+                        <span>•</span>
+                        <span>O&G Intrapartum Monitoring</span>
+                    </div>
+                </div>
+            </div>
 
-// Example usage inside your existing moveToActive() function:
-function moveToActive(id) {
-  const p = awaitingList.find(item => item.id === id);
-  if (p) {
-    logToGoogleSheet({
-      mrn: p.mrn,
-      name: p.name,
-      eventType: "Moved to Active Phase",
-      os: p.os,
-      contractions: p.contractions,
-      ctg: p.ctg,
-      assignedRoom: "Latent/Active Area",
-      notes: p.history
-    });
-  }
-}
+            <!-- Global Action Controls -->
+            <div class="flex items-center gap-2">
+                <button onclick="openAdmissionModal()" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-700 text-white shadow-xs flex items-center gap-1.5 transition">
+                    <i data-lucide="user-plus" class="w-4 h-4"></i>
+                    <span>+ Add Patient</span>
+                </button>
+
+                <button onclick="openRoomConfigModal()" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 transition flex items-center gap-1.5">
+                    <i data-lucide="sliders" class="w-4 h-4 text-sky-600 dark:text-sky-400"></i>
+                    <span>Manage LRs (<span id="visibleRoomCountTag">11</span>)</span>
+                </button>
+
+                <button onclick="simulateTurnoverAlert()" class="hidden lg:flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg text-amber-700 bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-300 transition">
+                    <i data-lucide="zap" class="w-3.5 h-3.5"></i>
+                    <span>Simulate &gt;1H Alert</span>
+                </button>
+
+                <button id="muteBtn" onclick="toggleMute()" class="p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition" title="Toggle Sound Alarms">
+                    <i id="muteIcon" data-lucide="volume-2" class="w-5 h-5"></i>
+                </button>
+
+                <button onclick="toggleDarkMode()" class="p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition" title="Toggle Dark Mode">
+                    <i data-lucide="moon" class="w-5 h-5 dark:hidden"></i>
+                    <i data-lucide="sun" class="w-5 h-5 hidden dark:block"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- TOP KPI STATS SUMMARY BAR -->
+        <div class="bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-700 px-4 py-2">
+            <div class="max-w-[1700px] mx-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 text-xs">
+                
+                <div class="bg-white dark:bg-slate-700/50 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 flex items-center justify-between shadow-2xs">
+                    <div>
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400 font-medium uppercase">Total Patients</p>
+                        <p id="stat-total" class="text-base font-bold text-slate-800 dark:text-white">0</p>
+                    </div>
+                    <i data-lucide="users" class="w-4 h-4 text-slate-400"></i>
+                </div>
+
+                <div class="bg-white dark:bg-slate-700/50 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 flex items-center justify-between shadow-2xs">
+                    <div>
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400 font-medium uppercase">Latent Phase</p>
+                        <p id="stat-latent" class="text-base font-bold text-amber-600 dark:text-amber-400">0</p>
+                    </div>
+                    <i data-lucide="clock" class="w-4 h-4 text-amber-500"></i>
+                </div>
+
+                <div class="bg-white dark:bg-slate-700/50 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 flex items-center justify-between shadow-2xs">
+                    <div>
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400 font-medium uppercase">Active Phase</p>
+                        <p id="stat-active" class="text-base font-bold text-sky-600 dark:text-sky-400">0</p>
+                    </div>
+                    <i data-lucide="activity" class="w-4 h-4 text-sky-500"></i>
+                </div>
+
+                <div class="bg-white dark:bg-slate-700/50 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 flex items-center justify-between shadow-2xs">
+                    <div>
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400 font-medium uppercase">Occupied LRs</p>
+                        <p id="stat-occupied" class="text-base font-bold text-indigo-600 dark:text-indigo-400">0</p>
+                    </div>
+                    <i data-lucide="bed" class="w-4 h-4 text-indigo-500"></i>
+                </div>
+
+                <div class="bg-white dark:bg-slate-700/50 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 flex items-center justify-between shadow-2xs">
+                    <div>
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400 font-medium uppercase">Vacant LRs</p>
+                        <p id="stat-vacant" class="text-base font-bold text-emerald-600 dark:text-emerald-400">0</p>
+                    </div>
+                    <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500"></i>
+                </div>
+
+                <div id="stat-alert-card" class="bg-white dark:bg-slate-700/50 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 flex items-center justify-between shadow-2xs transition-all">
+                    <div>
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400 font-medium uppercase">Overdue Alerts (&gt;1H)</p>
+                        <p id="stat-alerts" class="text-base font-bold text-slate-700 dark:text-slate-200">0</p>
+                    </div>
+                    <i id="stat-alert-icon" data-lucide="alert-triangle" class="w-4 h-4 text-slate-400"></i>
+                </div>
+
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN DUAL-COLUMN CONTENT WRAPPER -->
+    <main class="flex-1 max-w-[1700px] w-full mx-auto p-4 grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+        <!-- ================================================================= -->
+        <!-- LEFT COLUMN: PATIENT MANAGEMENT (LATENT & ACTIVE PHASE) (~55% / 7 cols) -->
+        <!-- ================================================================= -->
+        <div class="lg:col-span-7 flex flex-col gap-5">
+
+            <!-- SECTION A: LATENT PHASE OF LABOUR -->
+            <section class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs overflow-hidden flex flex-col">
+                <!-- Section Header -->
+                <div class="bg-amber-50/70 dark:bg-amber-950/30 px-4 py-2.5 border-b border-amber-200/80 dark:border-amber-900/50 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="p-1.5 bg-amber-500 text-white rounded-md shadow-2xs">
+                            <i data-lucide="clock" class="w-4 h-4"></i>
+                        </span>
+                        <div>
+                            <h2 class="font-bold text-sm text-amber-900 dark:text-amber-200 flex items-center gap-2">
+                                SECTION A: LATENT PHASE OF LABOUR (Awaiting LR / Triage)
+                                <span id="badge-latent-count" class="px-2 py-0.5 text-xs rounded-full bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 font-extrabold">0</span>
+                            </h2>
+                            <p class="text-[11px] text-amber-700 dark:text-amber-400">Cervical Os &lt; 5cm | Pre-labour, IOL, PROM monitoring</p>
+                        </div>
+                    </div>
+                    
+                    <input type="text" id="searchLatent" oninput="renderAll()" placeholder="Filter latent patients..." class="px-2.5 py-1 text-xs bg-white dark:bg-slate-900 border border-amber-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-amber-500 w-36 sm:w-48">
+                </div>
+
+                <!-- Latent Phase Table -->
+                <div class="overflow-x-auto max-h-[380px] overflow-y-auto">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead class="sticky top-0 bg-slate-50 dark:bg-slate-700/80 backdrop-blur-xs text-slate-600 dark:text-slate-300 z-10 border-b border-slate-200 dark:border-slate-700">
+                            <tr>
+                                <th class="p-2.5 font-semibold">Entry / Patient</th>
+                                <th class="p-2.5 font-semibold">Indication & Risks</th>
+                                <th class="p-2.5 font-semibold">Current Os</th>
+                                <th class="p-2.5 font-semibold">Contractions</th>
+                                <th class="p-2.5 font-semibold">CTG Status</th>
+                                <th class="p-2.5 font-semibold">Clinical Notes</th>
+                                <th class="p-2.5 font-semibold text-center">Pathways</th>
+                            </tr>
+                        </thead>
+                        <tbody id="latentTableBody" class="divide-y divide-slate-200 dark:divide-slate-700">
+                            <!-- JS Populated -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- SECTION B: ACTIVE PHASE OF LABOUR -->
+            <section class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs overflow-hidden flex flex-col">
+                <!-- Section Header -->
+                <div class="bg-sky-50/70 dark:bg-sky-950/30 px-4 py-2.5 border-b border-sky-200/80 dark:border-sky-900/50 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="p-1.5 bg-sky-600 text-white rounded-md shadow-2xs">
+                            <i data-lucide="activity" class="w-4 h-4"></i>
+                        </span>
+                        <div>
+                            <h2 class="font-bold text-sm text-sky-900 dark:text-sky-200 flex items-center gap-2">
+                                SECTION B: ACTIVE PHASE OF LABOUR
+                                <span id="badge-active-count" class="px-2 py-0.5 text-xs rounded-full bg-sky-200 dark:bg-sky-800 text-sky-900 dark:text-sky-100 font-extrabold">0</span>
+                            </h2>
+                            <p class="text-[11px] text-sky-700 dark:text-sky-400">Cervical Os ≥ 5cm | Intrapartum active monitoring & LR transfer</p>
+                        </div>
+                    </div>
+
+                    <input type="text" id="searchActive" oninput="renderAll()" placeholder="Filter active patients..." class="px-2.5 py-1 text-xs bg-white dark:bg-slate-900 border border-sky-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-500 w-36 sm:w-48">
+                </div>
+
+                <!-- Active Phase Table -->
+                <div class="overflow-x-auto max-h-[380px] overflow-y-auto">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead class="sticky top-0 bg-slate-50 dark:bg-slate-700/80 backdrop-blur-xs text-slate-600 dark:text-slate-300 z-10 border-b border-slate-200 dark:border-slate-700">
+                            <tr>
+                                <th class="p-2.5 font-semibold">Active Onset / Patient</th>
+                                <th class="p-2.5 font-semibold">Indication</th>
+                                <th class="p-2.5 font-semibold">Os / Station</th>
+                                <th class="p-2.5 font-semibold">Contractions</th>
+                                <th class="p-2.5 font-semibold">CTG Status</th>
+                                <th class="p-2.5 font-semibold">Analgesia & Management</th>
+                                <th class="p-2.5 font-semibold text-center">Pathway</th>
+                            </tr>
+                        </thead>
+                        <tbody id="activeTableBody" class="divide-y divide-slate-200 dark:divide-slate-700">
+                            <!-- JS Populated -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- RIGHT COLUMN: LABOUR ROOM TRACKER & PROGRESS (~45% / 5 cols) -->
+        <!-- ================================================================= -->
+        <div class="lg:col-span-5 flex flex-col gap-4">
+            
+            <!-- Room Controls Toolbar -->
+            <div class="bg-white dark:bg-slate-800 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs flex flex-wrap items-center justify-between gap-2">
+                <div>
+                    <h2 class="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                        <i data-lucide="layout-grid" class="w-4 h-4 text-emerald-500"></i>
+                        Labour Room Tracker Suite
+                    </h2>
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                        Usual Active Rooms: <strong class="text-sky-600 dark:text-sky-400">LR 12 – LR 16</strong>
+                    </p>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <button onclick="promptAddCustomRoom()" class="px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs flex items-center gap-1 transition">
+                        <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                        <span>+ Custom LR</span>
+                    </button>
+
+                    <button id="silenceAllBtn" onclick="silenceAllAlarms()" class="px-2.5 py-1 text-xs font-semibold rounded-lg bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 hover:bg-rose-200 transition flex items-center gap-1">
+                        <i data-lucide="volume-x" class="w-3.5 h-3.5"></i>
+                        <span>Mute</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Visible Room Quick Filter Pills -->
+            <div class="flex items-center justify-between gap-2 bg-slate-200/60 dark:bg-slate-800/80 p-1.5 rounded-lg text-xs">
+                <span class="text-[11px] font-semibold text-slate-600 dark:text-slate-300 ml-1">Filter Visible Rooms:</span>
+                <div class="flex gap-1.5">
+                    <button onclick="setQuickRoomPreset('usual')" class="px-2 py-0.5 rounded bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold shadow-2xs hover:bg-slate-100 text-[11px]">
+                        LR 12-16 Only
+                    </button>
+                    <button onclick="setQuickRoomPreset('all')" class="px-2 py-0.5 rounded bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold shadow-2xs hover:bg-slate-100 text-[11px]">
+                        Show All (7-17)
+                    </button>
+                    <button onclick="openRoomConfigModal()" class="px-2 py-0.5 rounded bg-sky-600 text-white font-semibold shadow-2xs hover:bg-sky-700 text-[11px]">
+                        Custom...
+                    </button>
+                </div>
+            </div>
+
+            <!-- ROOM CARDS GRID CONTAINER -->
+            <div id="lrGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 max-h-[800px] overflow-y-auto pr-1">
+                <!-- JS Populated Room Cards -->
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- MODAL 1: NEW PATIENT ADMISSION -->
+    <div id="admissionModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white dark:bg-slate-800 w-full max-w-2xl rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xl overflow-hidden my-8">
+            <div class="px-5 py-3.5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-700/50">
+                <h3 class="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-sm">
+                    <i data-lucide="user-plus" class="w-4 h-4 text-sky-600"></i>
+                    New Patient Admission & Triage Registration
+                </h3>
+                <button onclick="closeAdmissionModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <form id="admForm" onsubmit="handleAdmissionSubmit(event)" class="p-5 space-y-4 text-xs">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1">Entry Timestamp *</label>
+                        <input type="datetime-local" id="admTime" required class="w-full p-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1">MRN / Hospital ID *</label>
+                        <input type="text" id="admMrn" placeholder="e.g. MRN-90812" required class="w-full p-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div class="sm:col-span-2">
+                        <label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1">Patient Full Name *</label>
+                        <input type="text" id="admName" placeholder="Full Name" required class="w-full p-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1">Age *</label>
+                        <input type="number" id="admAge" min="15" max="55" placeholder="Age" required class="w-full p-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1">Gravida / Para *</label>
+                        <input type="text" id="admGP" placeholder="e.g. G2P1" required class="w-full p-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1">Gestation (Weeks) *</label>
+                        <input type="text" id="admGA" placeholder="e.g. 38.4 Wks" required class="w-full p-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1">Indication / Onset *</label>
+                        <select id="admIndication" required class="w-full p-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100">
+                            <option value="Spontaneous">Spontaneous</option>
+                            <option value="IOL">IOL (Induction)</option>
+                            <option value="PROM">PROM</option>
+                            <option value="PPROM">PPROM</option>
+                            <option value="IUD">IUD</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1">Cervical Os Dilation</label>
+                        <select id="admOs" class="w-full p-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100">
+                            <option value="Fingertip">Tip of Finger</option>
+                            <option value="1-2 cm">1-2 cm</option>
+                            <option value="3 cm">3 cm</option>
+                            <option value="4 cm">4 cm</option>
+                            <option value="5 cm">5 cm (Active Phase)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1">Contraction Pattern</label>
+                        <select id="admContraction" class="w-full p-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100">
+                            <option value="None">None</option>
+                            <option value="Mild/Irregular">Mild / Irregular</option>
+                            <option value="1-2 in 10m">1-2 in 10 mins</option>
+                            <option value="3 in 10m">3 in 10 mins</option>
+                            <option value="4 in 10m">4 in 10 mins</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1">CTG Category *</label>
+                        <select id="admCtg" required class="w-full p-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100">
+                            <option value="Normal">Normal / Reassuring</option>
+                            <option value="Suspicious">Suspicious</option>
+                            <option value="Pathological">Pathological</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1">Antenatal Risks</label>
+                    <div class="flex flex-wrap gap-2 pt-0.5">
+                        <label class="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">
+                            <input type="checkbox" name="riskTag" value="GDM" class="rounded text-sky-600"> GDM
+                        </label>
+                        <label class="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">
+                            <input type="checkbox" name="riskTag" value="PIH/PE" class="rounded text-sky-600"> PIH/PE
+                        </label>
+                        <label class="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">
+                            <input type="checkbox" name="riskTag" value="Prev Scar" class="rounded text-sky-600"> Prev Scar
+                        </label>
+                        <label class="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">
+                            <input type="checkbox" name="riskTag" value="Anemia" class="rounded text-sky-600"> Anemia
+                        </label>
+                        <label class="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">
+                            <input type="checkbox" name="riskTag" value="GBS+" class="rounded text-sky-600"> GBS+
+                        </label>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1">Clinical Notes & Plan</label>
+                    <input type="text" id="admNotes" placeholder="e.g. Plan ARM at 4cm, GBS prophylaxis initiated..." class="w-full p-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100">
+                </div>
+
+                <div class="pt-2 flex justify-end gap-2 border-t border-slate-200 dark:border-slate-700">
+                    <button type="button" onclick="closeAdmissionModal()" class="px-4 py-1.5 font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 rounded-lg">Cancel</button>
+                    <button type="submit" class="px-5 py-1.5 font-semibold bg-sky-600 hover:bg-sky-700 text-white rounded-lg shadow-xs">Register Patient</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 2: ROOM CONFIGURATION & REDUCTION MODAL -->
+    <div id="roomConfigModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 w-full max-w-lg rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xl overflow-hidden">
+            <div class="px-5 py-3.5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-700/50">
+                <h3 class="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-sm">
+                    <i data-lucide="sliders" class="w-4 h-4 text-sky-600"></i>
+                    Configure Visible Labour Rooms
+                </h3>
+                <button onclick="closeRoomConfigModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="p-5 space-y-4 text-xs">
+                <p class="text-slate-500 dark:text-slate-400">
+                    Toggle individual Labour Rooms on or off to reduce or expand the rooms displayed on the dashboard grid:
+                </p>
+
+                <!-- Quick Presets -->
+                <div class="flex gap-2 pb-2 border-b border-slate-200 dark:border-slate-700">
+                    <button onclick="setQuickRoomPreset('usual')" class="flex-1 py-1.5 px-3 bg-sky-50 dark:bg-sky-950/50 text-sky-800 dark:text-sky-200 border border-sky-200 dark:border-sky-800 font-semibold rounded-lg hover:bg-sky-100">
+                        Usual Active Only (LR 12 - LR 16)
+                    </button>
+                    <button onclick="setQuickRoomPreset('all')" class="flex-1 py-1.5 px-3 bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold rounded-lg hover:bg-slate-200">
+                        Enable All Rooms (LR 7 - LR 17)
+                    </button>
+                </div>
+
+                <!-- Room Checkbox List -->
+                <div id="roomToggleList" class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-60 overflow-y-auto p-1">
+                    <!-- JS Populated -->
+                </div>
+            </div>
+
+            <div class="px-5 py-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 flex justify-end">
+                <button onclick="closeRoomConfigModal()" class="px-4 py-1.5 font-semibold bg-sky-600 hover:bg-sky-700 text-white rounded-lg shadow-xs">
+                    Done
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 3: TRANSFER TO LR MODAL -->
+    <div id="transferModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
+            <div class="px-5 py-3.5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-700/50">
+                <h3 class="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-sm">
+                    <i data-lucide="arrow-right-circle" class="w-4 h-4 text-emerald-600"></i>
+                    Assign / Transfer Patient to Labour Room
+                </h3>
+                <button onclick="closeTransferModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="p-5 space-y-4 text-xs">
+                <input type="hidden" id="transferPatientId">
+                <input type="hidden" id="transferSourceSection">
+
+                <div class="p-3 bg-sky-50 dark:bg-sky-950/40 rounded-lg border border-sky-100 dark:border-sky-800 space-y-1">
+                    <p class="font-bold text-sky-900 dark:text-sky-200" id="transferPatientName">Patient: -</p>
+                    <p class="text-sky-700 dark:text-sky-300" id="transferPatientDetails">MRN: - | G/P: - | GA: -</p>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1">Select Available Vacant LR</label>
+                    <select id="transferRoomSelect" class="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 font-semibold">
+                        <!-- JS Populated -->
+                    </select>
+                </div>
+            </div>
+
+            <div class="px-5 py-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 flex justify-end gap-2 text-xs">
+                <button onclick="closeTransferModal()" class="px-3 py-1.5 font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 rounded-lg">Cancel</button>
+                <button onclick="confirmRoomTransfer()" class="px-4 py-1.5 font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-xs">Confirm Transfer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 4: LR PROGRESS UPDATE MODAL -->
+    <div id="progressModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 w-full max-w-lg rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
+            <div class="px-5 py-3.5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-700/50">
+                <h3 class="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-sm">
+                    <i data-lucide="edit-3" class="w-4 h-4 text-sky-600"></i>
+                    Update Intrapartum Progress in <span id="progRoomTitle" class="text-sky-600">LR</span>
+                </h3>
+                <button onclick="closeProgressModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="p-5 space-y-3.5 text-xs">
+                <input type="hidden" id="progRoomId">
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1">Cervical Os Dilation</label>
+                        <select id="progOs" class="w-full p-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg">
+                            <option value="5 cm">5 cm</option>
+                            <option value="6 cm">6 cm</option>
+                            <option value="7 cm">7 cm</option>
+                            <option value="8 cm">8 cm</option>
+                            <option value="9 cm">9 cm</option>
+                            <option value="10 cm / Fully">10 cm / Fully Dilated</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1">Head Station</label>
+                        <select id="progStation" class="w-full p-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg">
+                            <option value="-3">-3 (High)</option>
+                            <option value="-2">-2</option>
+                            <option value="-1">-1</option>
+                            <option value="0">0 (Ischial Spines)</option>
+                            <option value="+1">+1</option>
+                            <option value="+2">+2</option>
+                            <option value="+3">+3 (Perineum)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1">Contraction Pattern</label>
+                        <select id="progContraction" class="w-full p-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg">
+                            <option value="2 in 10m">2 in 10 mins</option>
+                            <option value="3 in 10m">3 in 10 mins</option>
+                            <option value="4 in 10m">4 in 10 mins</option>
+                            <option value="5 in 10m (Strong)">5 in 10 mins (Strong)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1">CTG Category</label>
+                        <select id="progCtg" class="w-full p-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg">
+                            <option value="Normal">Normal (Green)</option>
+                            <option value="Suspicious">Suspicious (Yellow)</option>
+                            <option value="Pathological">Pathological (Red)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1">Analgesia / Active Interventions</label>
+                    <input type="text" id="progInterventions" placeholder="e.g. Epidural top-up, Syntocinon 8mU/min, ARM done..." class="w-full p-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg">
+                </div>
+            </div>
+
+            <div class="px-5 py-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 flex justify-end gap-2 text-xs">
+                <button onclick="closeProgressModal()" class="px-3 py-1.5 font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 rounded-lg">Cancel</button>
+                <button onclick="saveRoomProgress()" class="px-4 py-1.5 font-semibold bg-sky-600 text-white hover:bg-sky-700 rounded-lg shadow-xs">Save Progress</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* ==========================================================================
+           STATE & SAMPLE DATA
+           ========================================================================== */
+
+        let latentPatients = [
+            {
+                id: 'lat_1',
+                entryTime: '10:15 AM',
+                mrn: 'MRN-88291',
+                name: 'Siti Sarah',
+                age: 29,
+                gp: 'G2P1',
+                ga: '38.5 Wks',
+                indication: 'IOL',
+                os: '2 cm',
+                contractions: '1-2 in 10m',
+                ctg: 'Normal',
+                risks: ['GDM', 'GBS+'],
+                notes: 'IOL for GDM. Propess inserted at 0800.'
+            },
+            {
+                id: 'lat_2',
+                entryTime: '11:00 AM',
+                mrn: 'MRN-77312',
+                name: 'Jessica Tan',
+                age: 32,
+                gp: 'G1P0',
+                ga: '39.1 Wks',
+                indication: 'PROM',
+                os: '3 cm',
+                contractions: '2-3 in 10m',
+                ctg: 'Suspicious',
+                risks: ['Prev Scar'],
+                notes: 'Clear liquor since 0600. Mild baseline tachycardia.'
+            },
+            {
+                id: 'lat_3',
+                entryTime: '11:45 AM',
+                mrn: 'MRN-91024',
+                name: 'Priya Sharma',
+                age: 27,
+                gp: 'G3P2',
+                ga: '37.3 Wks',
+                indication: 'Spontaneous',
+                os: '4 cm',
+                contractions: '3 in 10m',
+                ctg: 'Normal',
+                risks: ['Anemia'],
+                notes: 'Multipara progressing rapidly. Requesting Entonox.'
+            }
+        ];
+
+        let activePatients = [
+            {
+                id: 'act_1',
+                activeTime: '09:30 AM',
+                mrn: 'MRN-66421',
+                name: 'Aisha Abdullah',
+                age: 31,
+                gp: 'G2P1',
+                ga: '39.4 Wks',
+                indication: 'Spontaneous',
+                os: '6 cm',
+                station: '-1',
+                contractions: '3-4 in 10m',
+                ctg: 'Normal',
+                interventions: 'Entonox, ARM clear liquor',
+                risks: []
+            }
+        ];
+
+        // Master Rooms State (Default LR 7 to LR 17)
+        const defaultUsualActive = ['LR 12', 'LR 13', 'LR 14', 'LR 15', 'LR 16'];
+        let rooms = [];
+
+        for (let i = 7; i <= 17; i++) {
+            const rId = `LR ${i}`;
+            const isUsual = defaultUsualActive.includes(rId);
+            rooms.push({
+                id: rId,
+                name: rId,
+                isUsualActive: isUsual,
+                visible: isUsual, // Default to showing usual active rooms to optimize display
+                status: 'VACANT', // VACANT, OCCUPIED, POST_DELIVERY
+                patient: null,
+                deliveryTimestamp: null,
+                alarmActive: false
+            });
+        }
+
+        // Pre-occupy LR 14 and LR 15 for realistic initial state
+        const r14 = rooms.find(r => r.id === 'LR 14');
+        if (r14) {
+            r14.status = 'OCCUPIED';
+            r14.patient = {
+                mrn: 'MRN-55199',
+                name: 'Fatimah Noor',
+                gp: 'G1P0',
+                ga: '40.1 Wks',
+                os: '8 cm',
+                station: '0',
+                contractions: '4 in 10m',
+                ctg: 'Normal',
+                interventions: 'Epidural, Syntocinon 4 mU/min',
+                admittedAt: '09:00 AM'
+            };
+        }
+
+        const r15 = rooms.find(r => r.id === 'LR 15');
+        if (r15) {
+            r15.status = 'POST_DELIVERY';
+            // Set delivered 15 mins ago
+            r15.deliveryTimestamp = Date.now() - (15 * 60 * 1000);
+        }
+
+        /* ==========================================================================
+           WEB AUDIO ALARM SYSTEM
+           ========================================================================== */
+
+        let audioCtx = null;
+        let alarmOscillator = null;
+        let isMuted = false;
+
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        function playBeep(freq = 700, duration = 0.1) {
+            if (isMuted) return;
+            try {
+                initAudio();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            } catch (e) {}
+        }
+
+        function startContinuousAlarm() {
+            if (isMuted || alarmOscillator) return;
+            try {
+                initAudio();
+                alarmOscillator = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                alarmOscillator.type = 'sawtooth';
+                alarmOscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                alarmOscillator.connect(gain);
+                gain.connect(audioCtx.destination);
+                alarmOscillator.start();
+            } catch (e) {}
+        }
+
+        function stopContinuousAlarm() {
+            if (alarmOscillator) {
+                try {
+                    alarmOscillator.stop();
+                    alarmOscillator.disconnect();
+                } catch (e) {}
+                alarmOscillator = null;
+            }
+        }
+
+        function toggleMute() {
+            isMuted = !isMuted;
+            const muteBtn = document.getElementById('muteBtn');
+            const icon = document.getElementById('muteIcon');
+            if (isMuted) {
+                stopContinuousAlarm();
+                muteBtn.classList.add('text-rose-600', 'bg-rose-50');
+                icon.setAttribute('data-lucide', 'volume-x');
+            } else {
+                muteBtn.classList.remove('text-rose-600', 'bg-rose-50');
+                icon.setAttribute('data-lucide', 'volume-2');
+            }
+            lucide.createIcons();
+        }
+
+        function silenceAllAlarms() {
+            stopContinuousAlarm();
+            playBeep(400, 0.1);
+        }
+
+        /* ==========================================================================
+           CLINICAL PATHWAYS & PATIENT ACTIONS
+           ========================================================================== */
+
+        function openAdmissionModal() {
+            document.getElementById('admTime').value = new Date().toISOString().slice(0, 16);
+            document.getElementById('admissionModal').classList.remove('hidden');
+        }
+
+        function closeAdmissionModal() {
+            document.getElementById('admissionModal').classList.add('hidden');
+        }
+
+        function handleAdmissionSubmit(e) {
+            e.preventDefault();
+            playBeep(900, 0.15);
+
+            const riskNodes = document.querySelectorAll('input[name="riskTag"]:checked');
+            const risks = Array.from(riskNodes).map(n => n.value);
+
+            const osVal = document.getElementById('admOs').value;
+            const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            const newP = {
+                id: 'p_' + Date.now(),
+                entryTime: nowTime,
+                mrn: document.getElementById('admMrn').value,
+                name: document.getElementById('admName').value,
+                age: document.getElementById('admAge').value,
+                gp: document.getElementById('admGP').value,
+                ga: document.getElementById('admGA').value,
+                indication: document.getElementById('admIndication').value,
+                os: osVal,
+                contractions: document.getElementById('admContraction').value,
+                ctg: document.getElementById('admCtg').value,
+                risks: risks,
+                notes: document.getElementById('admNotes').value
+            };
+
+            // If Os is >= 5cm, admit directly to Active Phase
+            if (osVal === '5 cm') {
+                newP.activeTime = nowTime;
+                newP.station = '-1';
+                newP.interventions = 'Direct Admission to Active Phase';
+                activePatients.unshift(newP);
+            } else {
+                latentPatients.unshift(newP);
+            }
+
+            document.getElementById('admForm').reset();
+            closeAdmissionModal();
+            renderAll();
+        }
+
+        function updateInlineLatent(pId, field, value) {
+            const p = latentPatients.find(x => x.id === pId);
+            if (p) {
+                p[field] = value;
+                playBeep(600, 0.05);
+
+                // Auto promote prompt if dilation reaches 5cm
+                if (field === 'os' && value === '5 cm') {
+                    if (confirm(`${p.name} Os reached 5 cm. Promote patient to Active Phase?`)) {
+                        promoteToActive(pId);
+                        return;
+                    }
+                }
+                renderAll();
+            }
+        }
+
+        function updateInlineActive(pId, field, value) {
+            const p = activePatients.find(x => x.id === pId);
+            if (p) {
+                p[field] = value;
+                playBeep(600, 0.05);
+                renderAll();
+            }
+        }
+
+        function promoteToActive(pId) {
+            const idx = latentPatients.findIndex(x => x.id === pId);
+            if (idx !== -1) {
+                const p = latentPatients.splice(idx, 1)[0];
+                const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                activePatients.unshift({
+                    id: p.id,
+                    activeTime: nowStr,
+                    mrn: p.mrn,
+                    name: p.name,
+                    age: p.age,
+                    gp: p.gp,
+                    ga: p.ga,
+                    indication: p.indication,
+                    os: '5 cm',
+                    station: '-1',
+                    contractions: p.contractions || '3 in 10m',
+                    ctg: p.ctg,
+                    interventions: 'Promoted to Active Phase',
+                    risks: p.risks
+                });
+
+                playBeep(900, 0.15);
+                renderAll();
+            }
+        }
+
+        function removeLatentPatient(pId) {
+            if (confirm("Discharge or discharge to ward?")) {
+                latentPatients = latentPatients.filter(x => x.id !== pId);
+                renderAll();
+            }
+        }
+
+        /* ==========================================================================
+           ROOM VISIBILITY & REDUCTION CONTROLS
+           ========================================================================== */
+
+        function openRoomConfigModal() {
+            const list = document.getElementById('roomToggleList');
+            list.innerHTML = rooms.map(r => `
+                <label class="flex items-center justify-between p-2 rounded bg-slate-50 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600">
+                    <span class="font-bold text-slate-800 dark:text-slate-200">
+                        ${r.name} ${r.isUsualActive ? '<span class="text-[10px] text-sky-600 dark:text-sky-400">(Usual)</span>' : ''}
+                    </span>
+                    <input type="checkbox" onchange="toggleRoomVisibility('${r.id}', this.checked)" ${r.visible ? 'checked' : ''} class="w-4 h-4 rounded text-sky-600">
+                </label>
+            `).join('');
+
+            document.getElementById('roomConfigModal').classList.remove('hidden');
+        }
+
+        function closeRoomConfigModal() {
+            document.getElementById('roomConfigModal').classList.add('hidden');
+        }
+
+        function toggleRoomVisibility(rId, isVisible) {
+            const r = rooms.find(x => x.id === rId);
+            if (r) r.visible = isVisible;
+            renderAll();
+        }
+
+        function setQuickRoomPreset(type) {
+            rooms.forEach(r => {
+                if (type === 'usual') {
+                    r.visible = r.isUsualActive;
+                } else if (type === 'all') {
+                    r.visible = true;
+                }
+            });
+            renderAll();
+        }
+
+        function promptAddCustomRoom() {
+            const num = rooms.length + 7;
+            const rName = prompt("Enter Custom Labour Room / OT Title:", `LR ${num}`);
+            if (rName) {
+                rooms.push({
+                    id: rName,
+                    name: rName,
+                    isUsualActive: false,
+                    visible: true,
+                    status: 'VACANT',
+                    patient: null,
+                    deliveryTimestamp: null,
+                    alarmActive: false
+                });
+                renderAll();
+            }
+        }
+
+        /* ==========================================================================
+           LR ASSIGNMENT & PROGRESS MODALS
+           ========================================================================== */
+
+        function openTransferModal(pId, section) {
+            let p = section === 'latent' ? latentPatients.find(x => x.id === pId) : activePatients.find(x => x.id === pId);
+            if (!p) return;
+
+            document.getElementById('transferPatientId').value = pId;
+            document.getElementById('transferSourceSection').value = section;
+            document.getElementById('transferPatientName').innerText = `Patient: ${p.name} (${p.age} yrs)`;
+            document.getElementById('transferPatientDetails').innerText = `MRN: ${p.mrn} | G/P: ${p.gp} | GA: ${p.ga}`;
+
+            const roomSelect = document.getElementById('transferRoomSelect');
+            const availRooms = rooms.filter(r => r.visible && r.status === 'VACANT');
+
+            if (availRooms.length === 0) {
+                roomSelect.innerHTML = `<option value="">NO VISIBLE VACANT ROOMS AVAILABLE</option>`;
+            } else {
+                roomSelect.innerHTML = availRooms.map(r => `
+                    <option value="${r.id}">${r.name} ${r.isUsualActive ? '(Usual Active Suite)' : ''}</option>
+                `).join('');
+            }
+
+            document.getElementById('transferModal').classList.remove('hidden');
+        }
+
+        function closeTransferModal() {
+            document.getElementById('transferModal').classList.add('hidden');
+        }
+
+        function confirmRoomTransfer() {
+            const pId = document.getElementById('transferPatientId').value;
+            const section = document.getElementById('transferSourceSection').value;
+            const targetRoomId = document.getElementById('transferRoomSelect').value;
+
+            if (!targetRoomId) {
+                alert("Please select a vacant room.");
+                return;
+            }
+
+            let p = null;
+            if (section === 'latent') {
+                const idx = latentPatients.findIndex(x => x.id === pId);
+                if (idx !== -1) p = latentPatients.splice(idx, 1)[0];
+            } else {
+                const idx = activePatients.findIndex(x => x.id === pId);
+                if (idx !== -1) p = activePatients.splice(idx, 1)[0];
+            }
+
+            if (p) {
+                const r = rooms.find(x => x.id === targetRoomId);
+                const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                r.status = 'OCCUPIED';
+                r.patient = {
+                    mrn: p.mrn,
+                    name: p.name,
+                    gp: p.gp,
+                    ga: p.ga,
+                    os: p.os || '5 cm',
+                    station: p.station || '0',
+                    contractions: p.contractions || '3 in 10m',
+                    ctg: p.ctg || 'Normal',
+                    interventions: p.interventions || 'Admitted to LR',
+                    admittedAt: nowStr
+                };
+
+                playBeep(1000, 0.2);
+                closeTransferModal();
+                renderAll();
+            }
+        }
+
+        function openProgressModal(roomId) {
+            const r = rooms.find(x => x.id === roomId);
+            if (!r || !r.patient) return;
+
+            document.getElementById('progRoomId').value = roomId;
+            document.getElementById('progRoomTitle').innerText = roomId;
+            document.getElementById('progOs').value = r.patient.os;
+            document.getElementById('progStation').value = r.patient.station || '0';
+            document.getElementById('progContraction').value = r.patient.contractions;
+            document.getElementById('progCtg').value = r.patient.ctg;
+            document.getElementById('progInterventions').value = r.patient.interventions || '';
+
+            document.getElementById('progressModal').classList.remove('hidden');
+        }
+
+        function closeProgressModal() {
+            document.getElementById('progressModal').classList.add('hidden');
+        }
+
+        function saveRoomProgress() {
+            const rId = document.getElementById('progRoomId').value;
+            const r = rooms.find(x => x.id === rId);
+
+            if (r && r.patient) {
+                r.patient.os = document.getElementById('progOs').value;
+                r.patient.station = document.getElementById('progStation').value;
+                r.patient.contractions = document.getElementById('progContraction').value;
+                r.patient.ctg = document.getElementById('progCtg').value;
+                r.patient.interventions = document.getElementById('progInterventions').value;
+
+                playBeep(800, 0.1);
+                closeProgressModal();
+                renderAll();
+            }
+        }
+
+        function markDelivered(roomId) {
+            const r = rooms.find(x => x.id === roomId);
+            if (r && confirm(`Confirm delivery completed for ${r.patient.name} in ${r.id}?`)) {
+                r.status = 'POST_DELIVERY';
+                r.deliveryTimestamp = Date.now();
+                r.patient = null;
+                r.alarmActive = false;
+
+                playBeep(1200, 0.25);
+                renderAll();
+            }
+        }
+
+        function setRoomVacant(roomId) {
+            const r = rooms.find(x => x.id === roomId);
+            if (r) {
+                r.status = 'VACANT';
+                r.patient = null;
+                r.deliveryTimestamp = null;
+                r.alarmActive = false;
+
+                renderAll();
+                checkOverdueAlarms();
+            }
+        }
+
+        /* ==========================================================================
+           FLASH & BUZZ TURNOVER ALERTS (> 1 HOUR)
+           ========================================================================== */
+
+        function simulateTurnoverAlert() {
+            let targetRoom = rooms.find(r => r.status === 'POST_DELIVERY' && r.visible);
+            if (!targetRoom) {
+                targetRoom = rooms.find(r => r.status === 'VACANT' && r.visible);
+                if (targetRoom) targetRoom.status = 'POST_DELIVERY';
+            }
+
+            if (targetRoom) {
+                targetRoom.deliveryTimestamp = Date.now() - (65 * 60 * 1000); // 65 mins ago
+                checkOverdueAlarms();
+            }
+        }
+
+        function checkOverdueAlarms() {
+            const ONE_HOUR_MS = 60 * 60 * 1000;
+            let hasOverdue = false;
+            let overdueCount = 0;
+
+            rooms.forEach(r => {
+                if (r.status === 'POST_DELIVERY' && r.deliveryTimestamp) {
+                    const elapsed = Date.now() - r.deliveryTimestamp;
+                    if (elapsed >= ONE_HOUR_MS) {
+                        r.alarmActive = true;
+                        hasOverdue = true;
+                        overdueCount++;
+                    } else {
+                        r.alarmActive = false;
+                    }
+                } else {
+                    r.alarmActive = false;
+                }
+            });
+
+            if (hasOverdue) {
+                startContinuousAlarm();
+            } else {
+                stopContinuousAlarm();
+            }
+
+            // Update Alert Card
+            const alertElem = document.getElementById('stat-alerts');
+            const alertCard = document.getElementById('stat-alert-card');
+            const alertIcon = document.getElementById('stat-alert-icon');
+
+            if (alertElem) {
+                alertElem.innerText = overdueCount;
+                if (overdueCount > 0) {
+                    alertCard.className = "bg-rose-500 text-white px-3 py-1.5 rounded-lg border border-rose-600 flex items-center justify-between shadow-2xs animate-pulse";
+                    alertElem.className = "text-base font-black text-white";
+                    alertIcon.className = "w-4 h-4 text-white animate-bounce";
+                } else {
+                    alertCard.className = "bg-white dark:bg-slate-700/50 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 flex items-center justify-between shadow-2xs";
+                    alertElem.className = "text-base font-bold text-slate-700 dark:text-slate-200";
+                    alertIcon.className = "w-4 h-4 text-slate-400";
+                }
+            }
+        }
+
+        setInterval(checkOverdueAlarms, 5000);
+
+        /* ==========================================================================
+           MASTER RENDER ENGINE
+           ========================================================================== */
+
+        function renderAll() {
+            // Live Time
+            const now = new Date();
+            document.getElementById('liveTimestamp').innerText = now.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) + ' - ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            // 1. STATS
+            const visibleRooms = rooms.filter(r => r.visible);
+            document.getElementById('visibleRoomCountTag').innerText = visibleRooms.length;
+
+            const occupiedCount = rooms.filter(r => r.visible && r.status === 'OCCUPIED').length;
+            const vacantCount = rooms.filter(r => r.visible && r.status === 'VACANT').length;
+            const totalPatients = latentPatients.length + activePatients.length + occupiedCount;
+
+            document.getElementById('stat-total').innerText = totalPatients;
+            document.getElementById('stat-latent').innerText = latentPatients.length;
+            document.getElementById('stat-active').innerText = activePatients.length;
+            document.getElementById('stat-occupied').innerText = occupiedCount;
+            document.getElementById('stat-vacant').innerText = vacantCount;
+
+            document.getElementById('badge-latent-count').innerText = latentPatients.length;
+            document.getElementById('badge-active-count').innerText = activePatients.length;
+
+            // 2. RENDER LATENT PHASE TABLE
+            const searchLatent = document.getElementById('searchLatent').value.toLowerCase();
+            const latentTbody = document.getElementById('latentTableBody');
+            const filteredLatent = latentPatients.filter(p => p.mrn.toLowerCase().includes(searchLatent) || p.name.toLowerCase().includes(searchLatent));
+
+            if (filteredLatent.length === 0) {
+                latentTbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-slate-400 italic">No patients in Latent Phase</td></tr>`;
+            } else {
+                latentTbody.innerHTML = filteredLatent.map(p => {
+                    const ctgColor = p.ctg === 'Normal' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' :
+                                     p.ctg === 'Suspicious' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300';
+
+                    return `
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition">
+                            <td class="p-2.5 whitespace-nowrap">
+                                <div class="font-bold text-slate-900 dark:text-white">${p.name} (${p.age})</div>
+                                <div class="text-[11px] text-slate-500">${p.mrn} | ${p.gp} | ${p.ga}</div>
+                                <div class="text-[10px] text-slate-400">Adm: ${p.entryTime}</div>
+                            </td>
+                            <td class="p-2.5">
+                                <span class="px-2 py-0.5 rounded-full font-bold text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300">${p.indication}</span>
+                                <div class="flex flex-wrap gap-1 mt-1">
+                                    ${p.risks.map(r => `<span class="px-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded text-[9px] font-semibold">${r}</span>`).join('')}
+                                </div>
+                            </td>
+                            <td class="p-2.5">
+                                <select onchange="updateInlineLatent('${p.id}', 'os', this.value)" class="p-1 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded font-bold text-slate-800 dark:text-slate-100">
+                                    ${['Fingertip', '1-2 cm', '3 cm', '4 cm', '5 cm'].map(o => `<option value="${o}" ${p.os === o ? 'selected' : ''}>${o}</option>`).join('')}
+                                </select>
+                            </td>
+                            <td class="p-2.5">
+                                <select onchange="updateInlineLatent('${p.id}', 'contractions', this.value)" class="p-1 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded text-[11px]">
+                                    ${['None', 'Mild/Irregular', '1-2 in 10m', '2-3 in 10m', '3 in 10m'].map(c => `<option value="${c}" ${p.contractions === c ? 'selected' : ''}>${c}</option>`).join('')}
+                                </select>
+                            </td>
+                            <td class="p-2.5">
+                                <select onchange="updateInlineLatent('${p.id}', 'ctg', this.value)" class="p-1 border rounded text-[11px] font-bold ${ctgColor}">
+                                    ${['Normal', 'Suspicious', 'Pathological'].map(ctg => `<option value="${ctg}" ${p.ctg === ctg ? 'selected' : ''}>${ctg}</option>`).join('')}
+                                </select>
+                            </td>
+                            <td class="p-2.5 text-slate-600 dark:text-slate-300 max-w-xs truncate" title="${p.notes}">
+                                ${p.notes || '-'}
+                            </td>
+                            <td class="p-2.5 text-center whitespace-nowrap">
+                                <div class="flex items-center justify-center gap-1">
+                                    <button onclick="promoteToActive('${p.id}')" class="px-2 py-0.5 text-[10px] font-bold rounded bg-sky-600 hover:bg-sky-700 text-white shadow-2xs" title="Promote to Active Phase">
+                                        → Active
+                                    </button>
+                                    <button onclick="openTransferModal('${p.id}', 'latent')" class="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs" title="Assign to LR">
+                                        → LR
+                                    </button>
+                                    <button onclick="removeLatentPatient('${p.id}')" class="p-1 text-slate-400 hover:text-rose-600">
+                                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            // 3. RENDER ACTIVE PHASE TABLE
+            const searchActive = document.getElementById('searchActive').value.toLowerCase();
+            const activeTbody = document.getElementById('activeTableBody');
+            const filteredActive = activePatients.filter(p => p.mrn.toLowerCase().includes(searchActive) || p.name.toLowerCase().includes(searchActive));
+
+            if (filteredActive.length === 0) {
+                activeTbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-slate-400 italic">No patients currently in Active Phase</td></tr>`;
+            } else {
+                activeTbody.innerHTML = filteredActive.map(p => {
+                    const ctgColor = p.ctg === 'Normal' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' :
+                                     p.ctg === 'Suspicious' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300';
+
+                    return `
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition">
+                            <td class="p-2.5 whitespace-nowrap">
+                                <div class="font-bold text-slate-900 dark:text-white">${p.name}</div>
+                                <div class="text-[11px] text-slate-500">${p.mrn} | ${p.gp} | ${p.ga}</div>
+                                <div class="text-[10px] text-sky-600 dark:text-sky-400">Active Onset: ${p.activeTime}</div>
+                            </td>
+                            <td class="p-2.5">
+                                <span class="px-2 py-0.5 rounded-full font-bold text-[10px] bg-sky-100 text-sky-800 dark:bg-sky-900/60 dark:text-sky-300">${p.indication}</span>
+                            </td>
+                            <td class="p-2.5">
+                                <div class="flex items-center gap-1">
+                                    <select onchange="updateInlineActive('${p.id}', 'os', this.value)" class="p-1 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded font-bold text-slate-800 dark:text-slate-100 text-xs">
+                                        ${['5 cm', '6 cm', '7 cm', '8 cm', '9 cm', '10 cm / Fully'].map(o => `<option value="${o}" ${p.os === o ? 'selected' : ''}>${o}</option>`).join('')}
+                                    </select>
+                                    <select onchange="updateInlineActive('${p.id}', 'station', this.value)" class="p-1 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded text-[10px]">
+                                        ${['-3', '-2', '-1', '0', '+1', '+2', '+3'].map(s => `<option value="${s}" ${p.station === s ? 'selected' : ''}>S:${s}</option>`).join('')}
+                                    </select>
+                                </div>
+                            </td>
+                            <td class="p-2.5">
+                                <select onchange="updateInlineActive('${p.id}', 'contractions', this.value)" class="p-1 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded text-[11px]">
+                                    ${['2-3 in 10m', '3-4 in 10m', '4-5 in 10m'].map(c => `<option value="${c}" ${p.contractions === c ? 'selected' : ''}>${c}</option>`).join('')}
+                                </select>
+                            </td>
+                            <td class="p-2.5">
+                                <select onchange="updateInlineActive('${p.id}', 'ctg', this.value)" class="p-1 border rounded text-[11px] font-bold ${ctgColor}">
+                                    ${['Normal', 'Suspicious', 'Pathological'].map(ctg => `<option value="${ctg}" ${p.ctg === ctg ? 'selected' : ''}>${ctg}</option>`).join('')}
+                                </select>
+                            </td>
+                            <td class="p-2.5 text-slate-600 dark:text-slate-300 max-w-xs truncate" title="${p.interventions}">
+                                ${p.interventions || 'Monitoring'}
+                            </td>
+                            <td class="p-2.5 text-center">
+                                <button onclick="openTransferModal('${p.id}', 'active')" class="px-2.5 py-1 text-xs font-bold rounded bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs flex items-center gap-1 mx-auto">
+                                    <i data-lucide="bed" class="w-3.5 h-3.5"></i> Transfer
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            // 4. RENDER RIGHT COLUMN LABOUR ROOM GRID
+            const lrGrid = document.getElementById('lrGrid');
+            const activeVisibleRooms = rooms.filter(r => r.visible);
+
+            if (activeVisibleRooms.length === 0) {
+                lrGrid.innerHTML = `
+                    <div class="col-span-full p-8 text-center bg-white dark:bg-slate-800 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 text-slate-400">
+                        <i data-lucide="eye-off" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
+                        <p class="font-semibold text-sm">All Labour Rooms Hidden</p>
+                        <p class="text-xs">Click "Manage LRs" above to restore visible rooms.</p>
+                    </div>
+                `;
+            } else {
+                lrGrid.innerHTML = activeVisibleRooms.map(room => {
+                    let cardStyle = "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700";
+                    let badgeStyle = "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300";
+                    let bodyContent = "";
+
+                    if (room.alarmActive) {
+                        cardStyle = "alarm-flashing border-2 text-rose-900 dark:text-rose-100";
+                        badgeStyle = "bg-rose-600 text-white animate-pulse";
+                    } else if (room.status === 'VACANT') {
+                        cardStyle = "bg-white dark:bg-slate-800 border-emerald-300 dark:border-emerald-800";
+                        badgeStyle = "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200";
+                        bodyContent = `
+                            <div class="py-4 text-center space-y-1">
+                                <div class="w-8 h-8 mx-auto rounded-full bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                                    <i data-lucide="check" class="w-4 h-4"></i>
+                                </div>
+                                <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">Vacant & Ready</p>
+                            </div>
+                        `;
+                    } else if (room.status === 'OCCUPIED') {
+                        cardStyle = "bg-sky-50/40 dark:bg-slate-800 border-sky-300 dark:border-sky-700";
+                        badgeStyle = "bg-sky-600 text-white";
+                        const p = room.patient;
+                        bodyContent = `
+                            <div class="space-y-2.5 text-xs">
+                                <div class="border-b border-sky-100 dark:border-slate-700 pb-1.5">
+                                    <div class="font-bold text-slate-900 dark:text-white text-sm">${p.name}</div>
+                                    <div class="text-slate-500 text-[11px]">${p.mrn} | ${p.gp} | ${p.ga}</div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-1.5 text-[11px]">
+                                    <div><span class="text-slate-400">Dilation:</span> <strong class="text-sky-700 dark:text-sky-300">${p.os}</strong></div>
+                                    <div><span class="text-slate-400">Station:</span> <strong>${p.station}</strong></div>
+                                    <div><span class="text-slate-400">CTG:</span> <strong class="${p.ctg==='Normal'?'text-emerald-600':p.ctg==='Suspicious'?'text-amber-600':'text-rose-600'}">${p.ctg}</strong></div>
+                                    <div><span class="text-slate-400">Contractions:</span> <strong>${p.contractions}</strong></div>
+                                </div>
+                                <div class="text-[10px] bg-white dark:bg-slate-900 p-1.5 rounded border border-slate-200 dark:border-slate-700 truncate">
+                                    <span class="text-slate-400">Plan:</span> ${p.interventions || 'Active Monitoring'}
+                                </div>
+                                <div class="flex gap-1.5 pt-1">
+                                    <button onclick="openProgressModal('${room.id}')" class="flex-1 py-1 text-[11px] font-bold rounded bg-sky-600 text-white hover:bg-sky-700 flex items-center justify-center gap-1">
+                                        <i data-lucide="edit" class="w-3 h-3"></i> Progress
+                                    </button>
+                                    <button onclick="markDelivered('${room.id}')" class="flex-1 py-1 text-[11px] font-bold rounded bg-purple-600 text-white hover:bg-purple-700 flex items-center justify-center gap-1">
+                                        <i data-lucide="baby" class="w-3 h-3"></i> Delivered
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    } else if (room.status === 'POST_DELIVERY') {
+                        cardStyle = room.alarmActive 
+                            ? "alarm-flashing border-2" 
+                            : "bg-purple-50/50 dark:bg-slate-800 border-purple-300 dark:border-purple-800";
+                        
+                        badgeStyle = room.alarmActive ? "bg-rose-600 text-white" : "bg-purple-100 text-purple-800 dark:bg-purple-900/60 dark:text-purple-200";
+
+                        const elapsedMins = Math.floor((Date.now() - room.deliveryTimestamp) / 60000);
+
+                        bodyContent = `
+                            <div class="space-y-2 text-xs py-1">
+                                <div class="text-center space-y-0.5">
+                                    <p class="font-bold text-purple-900 dark:text-purple-200">Post-Delivery / Cleaning</p>
+                                    <p class="text-[10px] text-slate-500">Unoccupied Time:</p>
+                                    <p class="text-xl font-black ${room.alarmActive ? 'text-rose-600 dark:text-rose-300 animate-pulse' : 'text-purple-700 dark:text-purple-300'}">
+                                        ${elapsedMins} <span class="text-xs font-normal">mins</span>
+                                    </p>
+                                </div>
+
+                                ${room.alarmActive ? `
+                                    <div class="p-1 bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-200 rounded text-[10px] text-center font-extrabold flex items-center justify-center gap-1">
+                                        <i data-lucide="alert-octagon" class="w-3.5 h-3.5"></i>
+                                        OVERDUE UNCLEARED &gt;1H
+                                    </div>
+                                ` : ''}
+
+                                <button onclick="setRoomVacant('${room.id}')" class="w-full py-1.5 text-xs font-bold rounded ${room.alarmActive ? 'bg-rose-600 hover:bg-rose-700 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white'} transition shadow-2xs flex items-center justify-center gap-1">
+                                    <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Set Vacant / Cleared
+                                </button>
+                            </div>
+                        `;
+                    }
+
+                    return `
+                        <div class="rounded-xl border p-3.5 shadow-2xs transition-all relative ${cardStyle}">
+                            <div class="flex justify-between items-center pb-2 border-b border-slate-200/60 dark:border-slate-700 mb-2">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="font-extrabold text-sm text-slate-900 dark:text-white">${room.name}</span>
+                                    ${room.isUsualActive ? `<span class="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-sky-100 text-sky-800 dark:bg-sky-900/60 dark:text-sky-300">Active</span>` : ''}
+                                </div>
+                                <span class="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${badgeStyle}">
+                                    ${room.alarmActive ? 'ALERT >1H' : room.status.replace('_', ' ')}
+                                </span>
+                            </div>
+                            ${bodyContent}
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            lucide.createIcons();
+        }
+
+        function toggleDarkMode() {
+            document.documentElement.classList.toggle('dark');
+        }
+
+        window.onload = function() {
+            renderAll();
+            setInterval(renderAll, 10000); // Refresh time indicators every 10 seconds
+        }
+    </script>
+</body>
+</html>
