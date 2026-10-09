@@ -53,6 +53,9 @@
                 </div>
                 <div>
                     <div class="flex items-center gap-2">
+<button onclick="exportToGoogleSheets()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow-xs flex items-center gap-1.5 transition-colors">
+  📊 Sync / Export to Google Sheets
+</button>
                         <h1 class="font-bold text-base sm:text-lg leading-tight text-slate-900 dark:text-white">
                             Labour Room Clinical Command Suite
                         </h1>
@@ -1402,17 +1405,36 @@
             renderAll();
             setInterval(renderAll, 10000); // Refresh time indicators every 10 seconds
         }
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxktbEpE6xFSGIznKbPzrIthnFETTfuefX91SEroWZKnX4TrlKSQNMtYnUzBdgEQ3O9/exec";
+// Paste your Web App URL inside the quotes below
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx4Qi2ihvkaF4p2_Ggutwe7XFoUqXV6vulA48uik8YTU5qpIJmYTUG-Kj9-11f81VFo/exec";
 
-function sendToGoogleSheet(payload) {
-  if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes("https://script.google.com/macros/s/AKfycbzom4vtO6JWAPSUi4IpOw8qICYh1IfeRHP0itBFWuKpJKwZsLsEq6D6zRg8b22OtSzl/exec")) return;
-  
+function exportToGoogleSheets() {
+  if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes("https://script.google.com/macros/s/AKfycbx4Qi2ihvkaF4p2_Ggutwe7XFoUqXV6vulA48uik8YTU5qpIJmYTUG-Kj9-11f81VFo/exec")) {
+    alert("Please configure your Google Web App URL first!");
+    return;
+  }
+
+  const exportData = {
+    awaitingList: awaitingList,
+    activeList: activeList,
+    rooms: rooms
+  };
+
+  alert("Exporting current database state to Google Sheets...");
+
   fetch(GOOGLE_SCRIPT_URL, {
     method: "POST",
     mode: "no-cors",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  }).catch(err => console.error("Sync Error:", err));
+    body: JSON.stringify(exportData)
+  })
+  .then(() => {
+    alert("Export request sent! Check your Google Sheet in a few seconds.");
+  })
+  .catch(err => {
+    console.error("Export Error:", err);
+    alert("Export failed. Check console for details.");
+  });
 }
     </script>
 </body>
