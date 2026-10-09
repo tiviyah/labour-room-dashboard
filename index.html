@@ -1409,7 +1409,7 @@
 const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx4Qi2ihvkaF4p2_Ggutwe7XFoUqXV6vulA48uik8YTU5qpIJmYTUG-Kj9-11f81VFo/exec";
 
 function exportToGoogleSheets() {
-  if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes("PASTE_YOUR_WEB_APP_URL_HERE")) {
+  if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL === "") {
     alert("Please configure your Google Web App URL first!");
     return;
   }
@@ -1439,3 +1439,4 @@ function exportToGoogleSheets() {
     </script>
 </body>
 </html>
+
