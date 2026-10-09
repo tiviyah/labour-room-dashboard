@@ -1402,6 +1402,18 @@
             renderAll();
             setInterval(renderAll, 10000); // Refresh time indicators every 10 seconds
         }
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxktbEpE6xFSGIznKbPzrIthnFETTfuefX91SEroWZKnX4TrlKSQNMtYnUzBdgEQ3O9/exec ";
+
+function sendToGoogleSheet(payload) {
+  if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes("PASTE_YOUR_WEB_APP_URL_HERE")) return;
+  
+  fetch(GOOGLE_SCRIPT_URL, {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  }).catch(err => console.error("Sync Error:", err));
+}
     </script>
 </body>
 </html>
