@@ -1,0 +1,29 @@
+const GOOGLE_SCRIPT_URL = "YOUR_COPIED_WEB_APP_URL_HERE";
+
+function logToGoogleSheet(payload) {
+  if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes("YOUR_COPIED_WEB_APP_URL")) return;
+  
+  fetch(GOOGLE_SCRIPT_URL, {
+    method: "POST",
+    mode: "no-cors", // Bypasses CORS restrictions for Apps Script
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  }).catch(err => console.error("Sheet sync error:", err));
+}
+
+// Example usage inside your existing moveToActive() function:
+function moveToActive(id) {
+  const p = awaitingList.find(item => item.id === id);
+  if (p) {
+    logToGoogleSheet({
+      mrn: p.mrn,
+      name: p.name,
+      eventType: "Moved to Active Phase",
+      os: p.os,
+      contractions: p.contractions,
+      ctg: p.ctg,
+      assignedRoom: "Latent/Active Area",
+      notes: p.history
+    });
+  }
+}
